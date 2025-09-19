@@ -100,6 +100,13 @@ resource "aws_security_group" "app_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+      from_port   = 8080
+      to_port     = 8080
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+
   # Regra de saída para permitir que a instância acesse a internet (git, yum, etc)
   egress {
     from_port   = 0
@@ -168,10 +175,6 @@ variable "project_name" {
 variable "domain_name" {
   description = "Seu nome de domínio (ex: seudominio.com)"
   type        = string
-  # ATENÇÃO: É uma boa prática não ter um default aqui
-  # e fornecer o valor em um arquivo .tfvars,
-  # mas para simplicidade, vamos mantê-lo.
-  # MUDE ESTE VALOR PARA O SEU DOMÍNIO REAL.
   default     = "CloudReactViteSpringApp-produtos-max.com"
 }
 

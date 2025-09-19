@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: . # Constrói a imagem Docker a partir do diretório raiz do projeto Spring Boot
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+    # Variáveis de ambiente para o Spring Boot (opcional, H2 memória já funciona)
+    # SPRING_DATASOURCE_URL: jdbc:h2:mem:productdb
+    # SPRING_DATASOURCE_USERNAME: sa
+    # SPRING_DATASOURCE_PASSWORD: password
+    # SPRING_H2_CONSOLE_ENABLED: 'true'
+    depends_on:
+      - frontend # Dependência para garantir que o backend inicie depois do frontend (ou ao mesmo tempo)
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend # Constrói a imagem Docker a partir do diretório 'frontend'
+      dockerfile: Dockerfile
+      args:
+        # Define a variável de ambiente VITE_API_URL para o frontend
+        # Ele vai se comunicar com o backend usando o nome do serviço 'backend'
+        VITE_API_URL: http://backend:8080/api/products
+    ports:
+      - "5173:80" # Mapeia a porta 80 do container para a porta 5173 do host
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

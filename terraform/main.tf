@@ -52,6 +52,7 @@ resource "aws_vpc" "app_vpc" {
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.app_vpc.id
   cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
   tags = {
     Name = "${var.project_name}-public-subnet"
@@ -124,7 +125,7 @@ resource "aws_security_group" "app_sg" {
 # 6. EC2 Instance: O servidor onde a aplicação vai rodar
 resource "aws_instance" "app_server" {
   ami           = "ami-053b0d53c279acc90" # Amazon Linux 2023 - us-east-1
-  instance_type = "t3.micro"
+  instance_type = "t2.micro"
   
   # Anexa o Role do IAM para permitir acesso via Session Manager
   iam_instance_profile = aws_iam_instance_profile.ec2_ssm_instance_profile.name

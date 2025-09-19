@@ -125,7 +125,7 @@ resource "aws_security_group" "app_sg" {
 # 6. EC2 Instance: O servidor onde a aplicação vai rodar
 resource "aws_instance" "app_server" {
   ami           = "ami-053b0d53c279acc90" # Amazon Linux 2023 - us-east-1
-  instance_type = "t2.micro"
+  instance_type = "t3.micro"
   
   # Anexa o Role do IAM para permitir acesso via Session Manager
   iam_instance_profile = aws_iam_instance_profile.ec2_ssm_instance_profile.name

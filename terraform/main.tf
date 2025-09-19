@@ -134,15 +134,17 @@ resource "aws_instance" "app_server" {
   
   user_data = <<-EOF
               #!/bin/bash
-              sudo yum update -y
-              sudo yum install -y docker git
-              sudo systemctl start docker
-              sudo systemctl enable docker
-              sudo usermod -aG docker ec2-user
-              sudo yum install -y docker-compose-plugin
-              sudo su - ec2-user -c "git clone https://github.com/Max-Leal/React-Vite-Spring-na-AWS.git /home/ec2-user/${var.project_name}"
-              sudo su - ec2-user -c "cd /home/ec2-user/${var.project_name} && docker compose up --build -d"
+              yum update -y
+              yum install -y git
+              mkdir -p /app
+              cd /app
+              git clone https://github.com/Max-Leal/React-Vite-Spring-na-AWS.git
+              chmod +x /app/React-Vite-Spring-na-AWS/deploy.sh
+              /app/React-Vite-Spring-na-AWS/deploy.sh
               EOF
+
+
+
   tags = {
     Name = "${var.project_name}-server"
   }

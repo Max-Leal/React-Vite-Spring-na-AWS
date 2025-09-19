@@ -3,20 +3,8 @@ provider "aws" {
   region = "us-east-1" # Escolha sua região preferida
 }
 
-# Variáveis (opcional, mas boa prática)
-variable "project_name" {
-  description = "Nome do projeto"
-  type        = string
-  default     = "CloudReactViteSpringApp"
-}
-
-variable "domain_name" {
-  description = "Seu nome de domínio para Route 53 (se aplicável)"
-  type        = string
-  default     = "example.com" # MUDE PARA SEU DOMÍNIO REAL
-}
-
-# 1. VPC
+# --- REDE ---
+# 1. VPC: Ambiente de rede isolado
 resource "aws_vpc" "app_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
@@ -26,18 +14,17 @@ resource "aws_vpc" "app_vpc" {
   }
 }
 
-# 2. Subnet Pública
+# 2. Subnet Pública: Onde a EC2 vai morar e ter acesso à internet
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.app_vpc.id
   cidr_block              = "10.0.1.0/24"
-  map_public_ip_on_launch = true # Para a EC2 ter um IP público
-  availability_zone       = "us-east-1a" # Mude para uma AZ na sua região
+  map_public_ip_on_launch = true # Essencial para a EC2 ter um IP público
   tags = {
     Name = "${var.project_name}-public-subnet"
   }
 }
 
-# 3. Internet Gateway (para a VPC se comunicar com a internet)
+# 3. Internet Gateway: A "porta" da VPC para a internet
 resource "aws_internet_gateway" "app_igw" {
   vpc_id = aws_vpc.app_vpc.id
   tags = {
@@ -45,19 +32,18 @@ resource "aws_internet_gateway" "app_igw" {
   }
 }
 
-# 4. Tabela de Rotas
+# 4. Tabela de Rotas: O "GPS" da rede, direcionando tráfego para a internet
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.app_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0" # Para todo o tráfego de internet
+    gateway_id = aws_internet_gateway.app_igw.id
+  }
+
   tags = {
     Name = "${var.project_name}-public-rt"
   }
-}
-
-# Rota para a internet
-resource "aws_route" "public_internet_route" {
-  route_table_id         = aws_route_table.public_rt.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.app_igw.id
 }
 
 # Associação da Tabela de Rotas com a Subnet
@@ -66,21 +52,22 @@ resource "aws_route_table_association" "public_rt_association" {
   route_table_id = aws_route_table.public_rt.id
 }
 
-# 5. Security Group (Firewall para a EC2)
+# --- SEGURANÇA ---
+# 5. Security Group: O firewall da EC2
 resource "aws_security_group" "app_sg" {
   name        = "${var.project_name}-sg"
-  description = "Security group for Spring Boot and React/Vite app"
+  description = "Firewall para a aplicação"
   vpc_id      = aws_vpc.app_vpc.id
 
-  # Regra de entrada para SSH
+  # Libera acesso SSH (porta 22) para que você possa conectar
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Acesso de qualquer IP (alterar em produção)
+    cidr_blocks = ["0.0.0.0/0"] # ATENÇÃO: Em produção, restrinja para seu IP
   }
 
-  # Regra de entrada para o frontend (HTTP)
+  # Libera acesso HTTP (porta 80) para o frontend React
   ingress {
     from_port   = 80
     to_port     = 80
@@ -88,15 +75,7 @@ resource "aws_security_group" "app_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Regra de entrada para o backend (HTTP) - se você quiser acessar diretamente
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Acesso de qualquer IP (alterar em produção)
-  }
-
-  # Regras de saída (permite toda a saída)
+  # Permite que a instância acesse a internet (para o git pull, yum update, etc)
   egress {
     from_port   = 0
     to_port     = 0
@@ -109,34 +88,20 @@ resource "aws_security_group" "app_sg" {
   }
 }
 
-# 6. Chave SSH (se você ainda não tem uma e quer que o Terraform crie)
-# Remova ou comente esta seção se você já tem uma chave e vai referenciá-la.
-resource "tls_private_key" "app_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
-
-resource "aws_key_pair" "app_key_pair" {
-  key_name   = "${var.project_name}-key"
-  public_key = tls_private_key.app_key.public_key_openssh
-}
-
-resource "local_file" "ssh_key" {
-  content  = tls_private_key.app_key.private_key_pem
-  filename = "${var.project_name}-key.pem"
-  file_permission = "0400" # Permissões restritas para chave privada
-}
-
-# 7. EC2 Instance com UserData para Docker e Docker Compose
+# --- COMPUTAÇÃO ---
+# 6. EC2 Instance: O servidor onde a aplicação vai rodar
 resource "aws_instance" "app_server" {
-  ami           = "ami-053b0d53c279acc90" # Amazon Linux 2023 - us-east-1 (mude se usar outra região)
-  instance_type = "t3.small"             # t2.micro pode ser muito pequena para ambos containers
-  key_name      = aws_key_pair.app_key_pair.key_name # Ou sua chave existente
+  # AMI do Amazon Linux 2023 para us-east-1. Verifique o ID se usar outra região.
+  ami           = "ami-053b0d53c279acc90"
+  # t2.micro é a opção mais barata e elegível para o Free Tier da AWS.
+  # Pode ser lenta se a aplicação crescer.
+  instance_type = "t3.micro"
+  # Usa a chave que você já criou na AWS
+  key_name      = var.aws_key_pair_name
   subnet_id     = aws_subnet.public_subnet.id
   vpc_security_group_ids = [aws_security_group.app_sg.id]
-  associate_public_ip_address = true # Atribuir IP público
 
-  # UserData para instalar Docker, Docker Compose e puxar o repositório
+  # Script que roda na criação da máquina para instalar tudo e iniciar a aplicação
   user_data = <<-EOF
               #!/bin/bash
               sudo yum update -y
@@ -145,14 +110,12 @@ resource "aws_instance" "app_server" {
               sudo systemctl enable docker
               sudo usermod -aG docker ec2-user
 
-              # Instalar Docker Compose v2 (plugin do Docker)
               sudo yum install -y docker-compose-plugin
 
-              # Crie um diretório para o projeto e clone o repositório
-              # ATENÇÃO: SUBSTITUA COM A URL DO SEU REPOSITÓRIO GITHUB/BITBUCKET
+              # Clona o repositório como o usuário ec2-user
               sudo su - ec2-user -c "git clone https://github.com/Max-Leal/React-Vite-Spring-na-AWS.git /home/ec2-user/${var.project_name}"
 
-              # Navegue até o diretório e inicie o Docker Compose
+              # Inicia o docker-compose como o usuário ec2-user
               sudo su - ec2-user -c "cd /home/ec2-user/${var.project_name} && docker compose up --build -d"
               EOF
 
@@ -161,34 +124,18 @@ resource "aws_instance" "app_server" {
   }
 }
 
-# 8. Route 53 - Zona Hospedada (se já tiver)
-# Se você já tem uma Hosted Zone para o seu domínio, use um data source para referenciá-la
+# --- DNS ---
+# 7. Route 53: Aponta seu domínio para o IP da EC2
 data "aws_route53_zone" "selected" {
   name         = var.domain_name
   private_zone = false
 }
 
-# Registro A para apontar o domínio para o IP público da EC2
 resource "aws_route53_record" "app_record" {
   zone_id = data.aws_route53_zone.selected.zone_id
+  # Aponta o domínio raiz. Use "www" se preferir www.seudominio.com
   name    = var.domain_name
   type    = "A"
-  ttl     = "300"
+  ttl     = 300
   records = [aws_instance.app_server.public_ip]
-}
-
-# 9. Outputs (para obter informações úteis após a aplicação)
-output "public_ip" {
-  description = "IP público da instância EC2"
-  value       = aws_instance.app_server.public_ip
-}
-
-output "ssh_command" {
-  description = "Comando para SSH na instância"
-  value       = "ssh -i ${var.project_name}-key.pem ec2-user@${aws_instance.app_server.public_ip}"
-}
-
-output "app_url" {
-  description = "URL da aplicação (frontend)"
-  value       = "http://${var.domain_name}"
 }

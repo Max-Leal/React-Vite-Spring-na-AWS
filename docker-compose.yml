@@ -17,8 +17,7 @@ services:
       dockerfile: Dockerfile
     container_name: react-vite-frontend
     ports:
-      - "5173:80" # Mapeia a porta 80 do container Nginx para 5173 na sua máquina
-    # O frontend depende que o backend esteja pronto para receber requisições.
+      - "80:80"
     depends_on:
       - backend
     networks:

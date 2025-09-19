@@ -8,7 +8,7 @@ function App() {
     const [newProductPrice, setNewProductPrice] = useState('');
     const [editingProduct, setEditingProduct] = useState(null); // Para armazenar o produto sendo editado
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/products';
+    const API_URL = '/api/products';
 
     useEffect(() => {
         fetchProducts();

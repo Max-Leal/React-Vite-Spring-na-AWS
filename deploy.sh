@@ -1,6 +1,8 @@
 yum update
 yum install -y git docker cronie lsof
-yum install -y docker-compose-plugin
+
+curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
 
 # make sure every necessary service is running
 for service in docker crond; do
@@ -17,7 +19,7 @@ cd "$APP_DIR"
 git reset --hard HEAD
 git pull https://github.com/Max-Leal/React-Vite-Spring-na-AWS.git main
 
-docker compose up --build -d
+docker-compose up --build -d
 
 echo "Deploy/Update finished successfully."
 

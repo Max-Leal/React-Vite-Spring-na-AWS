@@ -157,7 +157,7 @@ variable "aws_region" {
 variable "instance_type" {
   description = "The EC2 instance's type."
   type        = string
-  default     = "t2.micro"
+  default     = "t3.micro"
 }
 
 variable "ami" {
@@ -169,7 +169,7 @@ variable "ami" {
 variable "security_group_name" {
   description = "Security group name"
   type        = string
-  default     = "sg-ReactViteSpring"
+  default     = "ReactViteSpring"
 }
 
 # ----------------------

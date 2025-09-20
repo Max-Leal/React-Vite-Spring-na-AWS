@@ -12,7 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/products")
-@CrossOrigin(origins = "http://localhost:5173") // Permitir requisições do seu frontend Vite
+@CrossOrigin(origins = "*") // Permitir requisições do seu frontend Vite
 public class ProductController {
 
     @Autowired

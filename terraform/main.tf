@@ -1,100 +1,84 @@
-# Configura o provedor AWS
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.92"
+    }
+  }
+
+  required_version = ">= 1.2"
+}
+
 provider "aws" {
-  region = "us-east-1"
+  region = var.aws_region
 }
 
-# --- PERMISSÕES (IAM) PARA O SESSION MANAGER ---
-# 1. Cria o "Role" que a EC2 irá "assumir"
-resource "aws_iam_role" "ec2_ssm_role" {
-  name = "${var.project_name}-ssm-role"
+# ----------------------
+# REDE
+# ----------------------
 
-  # Permite que o serviço EC2 assuma este role
-  assume_role_policy = jsonencode({
-    Version   = "2012-10-17",
-    Statement = [
-      {
-        Action    = "sts:AssumeRole",
-        Effect    = "Allow",
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-# 2. Anexa a política gerenciada pela AWS que dá as permissões para o Session Manager
-resource "aws_iam_policy_attachment" "ssm_policy_attachment" {
-  name       = "ssm-policy-attachment"
-  roles      = [aws_iam_role.ec2_ssm_role.name]
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-# 3. Cria o "Instance Profile", que é o contêiner para o Role que será anexado à EC2
-resource "aws_iam_instance_profile" "ec2_ssm_instance_profile" {
-  name = "${var.project_name}-ssm-instance-profile"
-  role = aws_iam_role.ec2_ssm_role.name
-}
-
-
-# --- REDE (VPC, Subnet, etc.) ---
-# 1. VPC: Ambiente de rede isolado
-resource "aws_vpc" "app_vpc" {
+# VPC
+resource "aws_vpc" "vpcDoMax" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
+
   tags = {
-    Name = "${var.project_name}-vpc"
+    Name = "vpc-do-max"
   }
 }
 
-# 2. Subnet Pública: Onde a EC2 vai morar e ter acesso à internet
-resource "aws_subnet" "public_subnet" {
-  vpc_id                  = aws_vpc.app_vpc.id
+# Subnet pública
+resource "aws_subnet" "subnetDoMax" {
+  vpc_id                  = aws_vpc.vpcDoMax.id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
+  availability_zone       = "${var.aws_region}a"
+
   tags = {
-    Name = "${var.project_name}-public-subnet"
+    Name = "subnet-do-max"
   }
 }
 
-# 3. Internet Gateway: A "porta" da VPC para a internet
-resource "aws_internet_gateway" "app_igw" {
-  vpc_id = aws_vpc.app_vpc.id
+# Internet Gateway
+resource "aws_internet_gateway" "igwDoMax" {
+  vpc_id = aws_vpc.vpcDoMax.id
+
   tags = {
-    Name = "${var.project_name}-igw"
+    Name = "igw-do-max"
   }
 }
 
-# 4. Tabela de Rotas: O "GPS" da rede, direcionando tráfego para a internet
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.app_vpc.id
+# Route Table
+resource "aws_route_table" "rtDoMax" {
+  vpc_id = aws_vpc.vpcDoMax.id
+
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.app_igw.id
+    gateway_id = aws_internet_gateway.igwDoMax.id
   }
+
   tags = {
-    Name = "${var.project_name}-public-rt"
+    Name = "rt-do-max"
   }
 }
 
-# Associação da Tabela de Rotas com a Subnet
-resource "aws_route_table_association" "public_rt_association" {
-  subnet_id      = aws_subnet.public_subnet.id
-  route_table_id = aws_route_table.public_rt.id
+# Associação da Subnet à Route Table
+resource "aws_route_table_association" "rtaDoMax" {
+  subnet_id      = aws_subnet.subnetDoMax.id
+  route_table_id = aws_route_table.rtDoMax.id
 }
 
+# ----------------------
+# SEGURANÇA
+# ----------------------
+resource "aws_security_group" "sgDoMax" {
+  name        = var.security_group_name
+  description = "Security group do Max"
+  vpc_id      = aws_vpc.vpcDoMax.id
 
-# --- SEGURANÇA ---
-# 5. Security Group: O firewall da EC2
-resource "aws_security_group" "app_sg" {
-  name        = "${var.project_name}-sg"
-  description = "Firewall for the application"
-  vpc_id      = aws_vpc.app_vpc.id
-
-  # Acesso HTTP para o frontend React
   ingress {
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -102,37 +86,43 @@ resource "aws_security_group" "app_sg" {
   }
 
   ingress {
-      from_port   = 8080
-      to_port     = 8080
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    }
+    description = "App port"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-  # Regra de saída para permitir que a instância acesse a internet (git, yum, etc)
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   tags = {
-    Name = "${var.project_name}-sg"
+    Name = "sg-do-max"
   }
 }
 
+# ----------------------
+# COMPUTAÇÃO
+# ----------------------
+resource "aws_instance" "ec2DoMax" {
+  ami                         = var.ami
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.subnetDoMax.id
+  vpc_security_group_ids      = [aws_security_group.sgDoMax.id]
+  associate_public_ip_address = true
 
-# --- COMPUTAÇÃO ---
-# 6. EC2 Instance: O servidor onde a aplicação vai rodar
-resource "aws_instance" "app_server" {
-  ami           = "ami-053b0d53c279acc90" # Amazon Linux 2023 - us-east-1
-  instance_type = "t3.micro"
-  
-  # Anexa o Role do IAM para permitir acesso via Session Manager
-  iam_instance_profile = aws_iam_instance_profile.ec2_ssm_instance_profile.name
-  
-  subnet_id     = aws_subnet.public_subnet.id
-  vpc_security_group_ids = [aws_security_group.app_sg.id]
-  
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
@@ -144,56 +134,53 @@ resource "aws_instance" "app_server" {
               /app/React-Vite-Spring-na-AWS/deploy.sh
               EOF
 
-
-
   tags = {
-    Name = "${var.project_name}-server"
+    Name = var.ec2_name
   }
 }
 
-
-# --- DNS ---
-# 7. Route 53: CRIA a Zona Hospedada para o seu domínio
-resource "aws_route53_zone" "app_zone" {
-  name = var.domain_name
-}
-
-# CRIA o registro 'A' dentro da Zona Hospedada criada acima
-resource "aws_route53_record" "app_record" {
-  zone_id = aws_route53_zone.app_zone.zone_id
-  name    = var.domain_name
-  type    = "A"
-  ttl     = 300
-  records = [aws_instance.app_server.public_ip]
-}
-
-
-# --- VARIÁVEIS ---
-variable "project_name" {
-  description = "Nome do projeto para identificar os recursos"
+# ----------------------
+# VARIÁVEIS
+# ----------------------
+variable "ec2_name" {
+  description = "name of the ec2 instance"
   type        = string
-  default     = "CloudReactViteSpringApp"
+  default     = "ReactViteSpring-na-AWS"
 }
 
-variable "domain_name" {
-  description = "Seu nome de domínio (ex: seudominio.com)"
+variable "aws_region" {
+  description = "Aws region"
   type        = string
-  default     = "CloudReactViteSpringApp-produtos-max.com"
+  default     = "us-east-1"
 }
 
-
-# --- OUTPUTS ---
-output "public_ip" {
-  description = "IP público da instância EC2. Use para verificar se o servidor está respondendo."
-  value       = aws_instance.app_server.public_ip
+variable "instance_type" {
+  description = "The EC2 instance's type."
+  type        = string
+  default     = "t2.micro"
 }
 
-output "app_url" {
-  description = "URL final da aplicação. Pode levar alguns minutos para o DNS propagar."
-  value       = "http://${var.domain_name}"
+variable "ami" {
+  description = "The ami selected"
+  type        = string
+  default     = "ami-08982f1c5bf93d976" # Amazon Linux 2
 }
 
-output "route53_name_servers" {
-  description = "IMPORTANTE: Configure estes Servidores de Nome (NS) no painel do seu provedor de domínio."
-  value       = aws_route53_zone.app_zone.name_servers
+variable "security_group_name" {
+  description = "Security group name"
+  type        = string
+  default     = "sg-ReactViteSpring"
+}
+
+# ----------------------
+# OUTPUTS
+# ----------------------
+output "ec2_public_ip" {
+  description = "IP público da instância"
+  value       = aws_instance.ec2DoMax.public_ip
+}
+
+output "ec2_public_dns" {
+  description = "DNS público da instância"
+  value       = aws_instance.ec2DoMax.public_dns
 }

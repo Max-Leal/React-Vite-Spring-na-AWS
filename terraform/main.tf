@@ -125,13 +125,36 @@ resource "aws_instance" "ec2DoMax" {
 
   user_data = <<-EOF
               #!/bin/bash
+              set -e
+
+              # Atualizar pacotes
               yum update -y
-              yum install -y git
-              mkdir -p /app
-              cd /app
-              git clone https://github.com/Max-Leal/React-Vite-Spring-na-AWS.git
-              chmod +x /app/React-Vite-Spring-na-AWS/deploy.sh
-              /app/React-Vite-Spring-na-AWS/deploy.sh
+
+              # Instalar dependências
+              yum install -y git docker cronie lsof
+
+              # Instalar docker-compose
+              curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              chmod +x /usr/local/bin/docker-compose
+
+              # Iniciar e habilitar serviços
+              for service in docker crond; do
+                  systemctl enable $service
+                  systemctl start $service
+              done
+
+              # Preparar app
+              APP_DIR="/app/React-Vite-Spring-na-AWS"
+              if [ ! -d "$APP_DIR" ]; then
+                  git clone https://github.com/Max-Leal/React-Vite-Spring-na-AWS.git $APP_DIR
+              fi
+
+              cd $APP_DIR
+              git pull origin main || true
+              chmod +x deploy.sh
+
+              # Executar primeiro deploy
+              $APP_DIR/deploy.sh
               EOF
 
   tags = {

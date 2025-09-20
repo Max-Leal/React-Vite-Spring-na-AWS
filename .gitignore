@@ -34,5 +34,5 @@ build/
 
 ### Terraform ###
 .terraform
-terraform.tfstate
-terraform.tfstate.backup
+/terraform/terraform.tfstate
+/terraform/terraform.tfstate.backup
